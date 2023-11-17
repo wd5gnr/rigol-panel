@@ -1,5 +1,6 @@
 from tkinter import *
 from tkinter.ttk import *
+import pyvisa
 
 class Button1(Frame):
     def __init__(self, parent,text='',command=None,width=1):
@@ -54,7 +55,13 @@ class Arrows(Frame):
 class rigol_panel_ui:
 
     def __init__(self):
+        # state
+        self.connected=False
+        self.visa=None
+        self.scope=None
+        # ui
         self.top = Tk()
+        self.top.protocol('WM_DELETE_WINDOW',self.top.destroy)
         self.usbnet=IntVar(value=0)
         self.top.geometry("300x600")
         self.top.minsize(250,600)
@@ -136,9 +143,23 @@ class rigol_panel_ui:
 
     def do_connect(self):
         print("Connect",self.cstring.get(),self.usbnet.get(),self.vselect.get())
-
+        if self.connected==False:
+            self.visa=pyvisa.ResourceManager()
+            # todo handle USB
+            cxstr="TCPIP::"+self.cstring.get()+"::INSTR"
+            self.scope=self.visa.open_resource(cxstr)
+            self.status.config(text=self.scope.query("*IDN?"))
+            self.connected=True
+    def update_scope(self):
+        if scope==None:
+            return
+        state=self.scope.query(":TRIG:STAT?")
+        if state[0:4]=="STOP":
+            pass  # run/stop red
+        else:
+            pass   # run/stop green
     def tick(self):
-        print("Tick!")
+        self.update_scope()
         self.top.after(1000,self.tick)
 
     def mainloop(self):
