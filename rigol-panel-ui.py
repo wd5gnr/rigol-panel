@@ -1,67 +1,31 @@
 from tkinter import *
 from tkinter.ttk import *
-import pyvisa
 
-class Button1(Frame):
-    def __init__(self, parent,text='',command=None,width=1):
-        Frame.__init__(self,parent)
-        self.btn=Button(self,text=text,command=command,width=width)
-        self.btn.grid(row=0, column=0)
+from gnrwidgets.dpad import Dpad
+from gnrwidgets.button1 import Button1
+from DHO900.rigol_scope import Scope
 
-class Arrows(Frame):
-    UP=0
-    DOWN=1
-    RIGHT=2
-    LEFT=3
-    EXEC=4
-    def __init__(self,parent,callback=None):
-        Frame.__init__(self,parent)
-        self.callback=callback
-        self.upbtn=Button1(self,text="^",command=lambda: self.press(Arrows.UP))
-        self.dnbtn=Button1(self,text="V",command=lambda: self.press(Arrows.DOWN))
-        self.rtbtn=Button1(self,text=">",command=lambda: self.press(Arrows.RIGHT))
-        self.lfbtn=Button1(self,text="<",command=lambda: self.press(Arrows.LEFT))
-        self.exebtn=Button1(self,text="*",command=lambda: self.press(Arrows.EXEC))
-        self.upbtn.grid(row=0, column=1)
-        self.lfbtn.grid(row=1, column=0)
-        self.rtbtn.grid(row=1, column=2)
-        self.dnbtn.grid(row=2,column=1)
-        self.exebtn.grid(row=1,column=1)
+from pypref import SinglePreferences as Preferences
 
-# you have choices. Override press, override up/down/right/left/execute
-# or set a callback. To set a callback you do not need to derive        
-    def press(self,btn):
-        if self.callback==None:
-            [self.up, self.down, self.right, self.left, self.execute][btn]()
-        else:
-            self.callback(btn)
 
-    # presumably you will override these or replace press or use callback   
-    def up(self):
-        print("Up")
+class Rigol_panel_ui:
 
-    def down(self):
-        print("Down")
-    
-    def right(self):
-        print("Right")
-
-    def left(self):
-        print("Left")
-    
-    def execute(self):
-        print("Execute")
-
-class rigol_panel_ui:
+    REFRESH_DELAY=250   # milliseconds
 
     def __init__(self):
         # state
         self.connected=False
-        self.visa=None
         self.scope=None
+        self.current_rs=1   # 1= run, 0=stop
+        self.pref=Preferences(filename='rigol-panel-prefs.py')
         # ui
         self.top = Tk()
         self.top.protocol('WM_DELETE_WINDOW',self.top.destroy)
+# style is only needed right now
+        style=Style()
+        style.configure("GoBtn.TButton",foreground="green")
+        style.configure("StopBtn.TButton",foreground="red")
+
         self.usbnet=IntVar(value=0)
         self.top.geometry("300x600")
         self.top.minsize(250,600)
@@ -71,26 +35,26 @@ class rigol_panel_ui:
         self.cframe=Frame(self.top)
         self.netbtn=Radiobutton(self.unframe,text='TCP/IP',value=0,var=self.usbnet)
         self.usbbtn=Radiobutton(self.unframe,text='USB',value=1,var=self.usbnet)
-        self.conn_btn=Button(self.cframe,text="Connect",command=self.do_connect)
-        self.msg = Label(self.top,text="Message")
+        self.usbnet.set(self.pref.get('usbnet',0))
+        self.msg = Label(self.top,text="Disconnected")
         self.status = Label(self.top,text="Disconnected")
         self.cstring = Entry(self.cframe)
+        self.cstring.insert(0,self.pref.get('visa_string',default='192.168.1.1'))
+        self.conn_btn=Button(self.cframe,text="Connect",command=self.do_connect)
         self.clabel=LabelFrame(self.top,text='Control')
-        self.rsbtn=Button(self.clabel,text="Run/Stop",command=self.do_rs)
+        self.rsbtn=Button(self.clabel,text="Run/Stop",command=self.do_rs,style="GoBtn.TButton")
         self.singbtn=Button(self.clabel,text="Single",command=self.do_single)
         self.autobtn=Button(self.clabel,text='Auto',command=self.do_auto)
         self.vlabel=LabelFrame(self.top,text='Vertical')
         self.vselect=Combobox(self.vlabel,state='readonly',
-            values=['CH1','CH2','CH3','CH4','M1','M2','M3','M4','REF'])
+            values=['CH1','CH2','CH3','CH4'])
         self.vselect.set('CH1')
-        self.vdpad=Arrows(self.vlabel,self.do_vert)
+        self.vdpad=Dpad(self.vlabel,self.do_vert)
         self.hlabel=LabelFrame(self.top,text="Horizontal")
-        self.hdpad=Arrows(self.hlabel,self.do_horiz)
+        self.hdpad=Dpad(self.hlabel,self.do_horiz)
         self.triglabel=LabelFrame(self.top,text="Trigger")
-        self.trigup=Button1(self.triglabel,text='^',command=self.do_trigup)
-        self.trigdn=Button1(self.triglabel,text="V",command=self.do_trigdn)
         self.tselect=Combobox(self.triglabel,state='readonly',
-            values=['Auto','Norm','Single'])
+            values=['Auto','Normal','Single'])
         self.tselect.set('Auto')
         self.tselect.bind("<<ComboboxSelected>>",self.trigchange)
 
@@ -98,7 +62,7 @@ class rigol_panel_ui:
         self.netbtn.pack(side="left")
         self.usbbtn.pack(side="left")
         self.unframe.pack(side="top")
-        self.conn_btn.pack(side="left")
+        self.conn_btn.pack(side="right")
         self.cstring.pack(side="left")
         self.cframe.pack(side="top")
         self.rsbtn.pack(side="left")
@@ -110,65 +74,119 @@ class rigol_panel_ui:
         self.vlabel.pack(side="top",fill="both",expand="yes")
         self.hdpad.pack(side="top")
         self.hlabel.pack(side="top",fill="both",expand="yes")
-        self.trigup.pack(side='top')
-        self.trigdn.pack(side='bottom')
-        self.tselect.pack(side='bottom')
+        self.tselect.pack(side='top',fill='both',expand='yes')
         self.triglabel.pack(side='top',fill='both',expand='yes')
-        self.status.pack(side="bottom", fill='x')
-        self.msg.pack(side="bottom", fill='x')
+        self.status.pack(side="bottom", fill='y')
+        self.msg.pack(side="bottom", fill='both',expand='yes')
+
+        # grab enter key in connect string
+        self.cstring.bind("<Return>",self.enter_connect)
+        self.cstring.focus()
+
+    def enter_connect(self,event):
+        if self.connected==True:
+            return
+        self.do_connect()
 
     def trigchange(self,event):
-        print(self.tselect.get())
-
-    def do_trigup(self):
-        pass
-
-    def do_trigdn(self):
-        pass
+        if self.connected==False:
+            return
+        self.scope.trig_sweep(self.tselect.get())
 
     def do_rs(self):
-        pass
+        if self.connected==False:
+            return
+        if self.current_rs==1:
+            self.current_rs=0
+            self.scope.stop()
+        else:
+            self.current_rs=1
+            self.scope.run()
 
     def do_auto(self):
-        pass
+        if self.connected==False:
+            return
+        self.scope.auto()
 
     def do_single(self):
-        pass
+        if self.connected==False:
+            return
+        self.scope.single()
 
     def do_vert(self,key):
-        print("***",key,self.vselect.get())
+        if self.connected==False:
+            return
+        chan=int(self.vselect.get())
+        if key==Dpad.UP:
+            self.scope.vpos(chan,1)
+        if key==Dpad.DOWN:
+            self.scope.vpos(chan,-1)
+        if key==Dpad.RIGHT:
+            self.scope.vscale(chan,1)
+        if key==Dpad.LEFT:
+            self.scope.vscale(chan,-1)
+        if key==Dpad.EXEC:
+            self.scope.vpos(chan,0)
     
     def do_horiz(self,key):
-        print("HHH",key)
+        if self.connected==False:
+            return
+        if key==Dpad.RIGHT:
+            self.scope.hpos(1)
+        if key==Dpad.LEFT:
+            self.scope.hpos(-1)
+        if key==Dpad.EXEC:
+            self.scope.hpos(0)
+        if key==Dpad.UP:
+            self.scope.hscale(1)
+        if key==Dpad.DOWN:
+            self.scope.hscale(-1)
 
     def do_connect(self):
-        print("Connect",self.cstring.get(),self.usbnet.get(),self.vselect.get())
         if self.connected==False:
-            self.visa=pyvisa.ResourceManager()
-            # todo handle USB
-            cxstr="TCPIP::"+self.cstring.get()+"::INSTR"
-            self.scope=self.visa.open_resource(cxstr)
-            self.status.config(text=self.scope.query("*IDN?"))
+            self.scope=Scope()
+            self.scope.connect(self.usbnet.get(),self.cstring.get())
             self.connected=True
+            self.status['text']=self.scope.id()
+            self.pref.update_preferences({'visa_string': self.cstring.get()})
+            self.pref.update_preferences({'usbnet': self.usbnet.get()})
+
+# update our controls and model periodically
     def update_scope(self):
-        if scope==None:
+        if self.connected==False:
             return
-        state=self.scope.query(":TRIG:STAT?")
+        state=self.scope.trig_status()
         if state[0:4]=="STOP":
-            pass  # run/stop red
+            self.rsbtn.configure(style="StopBtn.TButton")
+            self.current_rs=0
         else:
-            pass   # run/stop green
+            self.rsbtn.configure(style="GoBtn.TButton")
+            self.current_rs=1
+        # check for trigger mode
+        state1=self.scope.trig_sweep()
+        if state1[0:4]=="AUTO":
+            self.tselect.set('Auto')
+        if state1[0:4]=="NORM":
+            self.tselect.set('Normal')
+        if state1[0:4]=="SING":
+            self.tselect.set('Single')
+        if self.connected==True:
+            msgstring="Connected "+state+" "+state1
+        else:
+            msgstring="Disconnected"
+        self.msg['text']=msgstring
+
     def tick(self):
         self.update_scope()
-        self.top.after(1000,self.tick)
+        self.top.after(self.REFRESH_DELAY,self.tick)
 
     def mainloop(self):
-        self.top.after(1000,self.tick)
+        self.top.after(self.REFRESH_DELAY,self.tick)
         self.top.mainloop()
 
 
 if __name__=="__main__":
-    w=rigol_panel_ui()
+    w=Rigol_panel_ui()
     w.mainloop()
 
     
