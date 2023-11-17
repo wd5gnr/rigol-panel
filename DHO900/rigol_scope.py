@@ -1,3 +1,5 @@
+# Talk to Rigol DS900 over network or (untested) USB via pyvisa
+
 import pyvisa
 
 class Scope:
@@ -7,6 +9,7 @@ class Scope:
         self.visa=None
         self.scope=None
 
+# do the connect
     def connect(self,usb,cxstring):
         if usb==0:
             cxstr="TCPIP::"+cxstring+"::INSTR"
@@ -16,6 +19,7 @@ class Scope:
         self.scope=self.visa.open_resource(cxstr)
         self.connected=True
 
+# send a query and return a response
     def query(self,string):
         s=self.scope.query(string)
         if isinstance(s,str):
@@ -23,12 +27,22 @@ class Scope:
         else:
             return s
 
+# just send
     def write(self,string):
         return self.scope.write(string)
 
+# get ID
     def id(self):
         return self.query("*IDN?")
     
+# The rest is just SCPI commands wrapped
+# Since the scope doesn't have "KEY" commands
+# we often need to know what the current state is
+# to decide what to do
+# You could be smarter like changing increments based
+# on current mode, etc. and you could, of course,
+# add many, many more functions (https://www.rigol.eu/Public/Uploads/uploadfile/files/20230823/20230823143925_64e5a99d4dd84.pdf)
+# but this gets us to done on the panel
     def trig_status(self):
         return self.query(":TRIG:STAT?")
 

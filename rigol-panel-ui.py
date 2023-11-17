@@ -1,3 +1,4 @@
+# Simple control panel for use along side RIGOL DHO900 Web interface
 from tkinter import *
 from tkinter.ttk import *
 
@@ -10,14 +11,14 @@ from pypref import SinglePreferences as Preferences
 
 class Rigol_panel_ui:
 
-    REFRESH_DELAY=250   # milliseconds
+    REFRESH_DELAY=250   # milliseconds between update polls
 
     def __init__(self):
         # state
-        self.connected=False
-        self.scope=None
+        self.connected=False     # are we connected?
+        self.scope=None          # Where's the scope?
         self.current_rs=1   # 1= run, 0=stop
-        self.pref=Preferences(filename='rigol-panel-prefs.py')
+        self.pref=Preferences(filename='rigol-panel-prefs.py')  # preference file
         # ui
         self.top = Tk()
         self.top.protocol('WM_DELETE_WINDOW',self.top.destroy)
@@ -25,7 +26,7 @@ class Rigol_panel_ui:
         style=Style()
         style.configure("GoBtn.TButton",foreground="green")
         style.configure("StopBtn.TButton",foreground="red")
-
+# lots of UI elements and stuff
         self.usbnet=IntVar(value=0)
         self.top.geometry("300x600")
         self.top.minsize(250,600)
@@ -83,16 +84,30 @@ class Rigol_panel_ui:
         self.cstring.bind("<Return>",self.enter_connect)
         self.cstring.focus()
 
+    # if you press enter in the connect string, you get here
     def enter_connect(self,event):
         if self.connected==True:
             return
         self.do_connect()
 
+    # Connect to the scope
+    def do_connect(self):
+        if self.connected==False:
+            self.scope=Scope()
+            self.scope.connect(self.usbnet.get(),self.cstring.get())
+            self.connected=True
+            self.status['text']=self.scope.id()
+            self.pref.update_preferences({'visa_string': self.cstring.get()})
+            self.pref.update_preferences({'usbnet': self.usbnet.get()})
+
+
+    # change the trigger
     def trigchange(self,event):
         if self.connected==False:
             return
         self.scope.trig_sweep(self.tselect.get())
 
+    # Handle the run/stop button 
     def do_rs(self):
         if self.connected==False:
             return
@@ -103,16 +118,19 @@ class Rigol_panel_ui:
             self.current_rs=1
             self.scope.run()
 
+    # Auto button (not auto trigger)
     def do_auto(self):
         if self.connected==False:
             return
         self.scope.auto()
 
+    # Single trigger
     def do_single(self):
         if self.connected==False:
             return
         self.scope.single()
 
+    # vertical DPAD - vertical position/scale (press to zero)
     def do_vert(self,key):
         if self.connected==False:
             return
@@ -128,6 +146,7 @@ class Rigol_panel_ui:
         if key==Dpad.EXEC:
             self.scope.vpos(chan,0)
     
+    # Horizontal DPAD - timebase position/scale
     def do_horiz(self,key):
         if self.connected==False:
             return
@@ -141,15 +160,6 @@ class Rigol_panel_ui:
             self.scope.hscale(1)
         if key==Dpad.DOWN:
             self.scope.hscale(-1)
-
-    def do_connect(self):
-        if self.connected==False:
-            self.scope=Scope()
-            self.scope.connect(self.usbnet.get(),self.cstring.get())
-            self.connected=True
-            self.status['text']=self.scope.id()
-            self.pref.update_preferences({'visa_string': self.cstring.get()})
-            self.pref.update_preferences({'usbnet': self.usbnet.get()})
 
 # update our controls and model periodically
     def update_scope(self):
@@ -176,10 +186,12 @@ class Rigol_panel_ui:
             msgstring="Disconnected"
         self.msg['text']=msgstring
 
+    # This will run after a delay (and will retrigger too)
     def tick(self):
         self.update_scope()
         self.top.after(self.REFRESH_DELAY,self.tick)
 
+    # Set up first delay call and then go to main loop
     def mainloop(self):
         self.top.after(self.REFRESH_DELAY,self.tick)
         self.top.mainloop()

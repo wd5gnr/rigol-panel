@@ -1,3 +1,7 @@
+# Simple 4 arrow "D-pad" with an enter key in the middle
+# You can set a callback, override press, or override the individual
+# methods
+
 from tkinter import *
 from tkinter.ttk import *
 
