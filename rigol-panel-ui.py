@@ -6,7 +6,14 @@ from gnrwidgets.dpad import Dpad
 from gnrwidgets.button1 import Button1
 from DHO900.rigol_scope import Scope
 
+import os
+import pathlib
 from pypref import SinglePreferences as Preferences
+
+# find a config directory
+config = os.environ.get('APPDATA') or os.environ.get('XDG_CONFIG_HOME')
+config = pathlib.Path(config) if config else pathlib.Path.home() / ".config"
+pref=Preferences(directory=config,filename='rigol-panel-prefs.py')  # preference file
 
 
 class Rigol_panel_ui:
@@ -14,11 +21,11 @@ class Rigol_panel_ui:
     REFRESH_DELAY=250   # milliseconds between update polls
 
     def __init__(self):
+        global pref
         # state
         self.connected=False     # are we connected?
         self.scope=None          # Where's the scope?
         self.current_rs=1   # 1= run, 0=stop
-        self.pref=Preferences(filename='rigol-panel-prefs.py')  # preference file
         # ui
         self.top = Tk()
         self.top.protocol('WM_DELETE_WINDOW',self.top.destroy)
@@ -36,11 +43,11 @@ class Rigol_panel_ui:
         self.cframe=Frame(self.top)
         self.netbtn=Radiobutton(self.unframe,text='TCP/IP',value=0,var=self.usbnet)
         self.usbbtn=Radiobutton(self.unframe,text='USB',value=1,var=self.usbnet)
-        self.usbnet.set(self.pref.get('usbnet',0))
+        self.usbnet.set(pref.get('usbnet',0))
         self.msg = Label(self.top,text="Disconnected")
         self.status = Label(self.top,text="Disconnected")
         self.cstring = Entry(self.cframe)
-        self.cstring.insert(0,self.pref.get('visa_string',default='192.168.1.1'))
+        self.cstring.insert(0,pref.get('visa_string',default='192.168.1.1'))
         self.conn_btn=Button(self.cframe,text="Connect",command=self.do_connect)
         self.clabel=LabelFrame(self.top,text='Control')
         self.rsbtn=Button(self.clabel,text="Run/Stop",command=self.do_rs,style="GoBtn.TButton")
@@ -92,13 +99,14 @@ class Rigol_panel_ui:
 
     # Connect to the scope
     def do_connect(self):
+        global pref
         if self.connected==False:
             self.scope=Scope()
             self.scope.connect(self.usbnet.get(),self.cstring.get())
             self.connected=True
             self.status['text']=self.scope.id()
-            self.pref.update_preferences({'visa_string': self.cstring.get()})
-            self.pref.update_preferences({'usbnet': self.usbnet.get()})
+            pref.update_preferences({'visa_string': self.cstring.get()})
+            pref.update_preferences({'usbnet': self.usbnet.get()})
 
 
     # change the trigger

@@ -94,3 +94,13 @@ class Scope:
         self.write(":TIM:SCAL "+str(scale))
 
     
+if __name__=="__main__":
+    import time
+    # test script
+    scope=Scope()
+    scope.connect(0,"192.168.1.92")
+    while True:
+        print("here we go again...")
+        scope.single()
+        time.sleep(10)
+        print(scope.trig_status())
