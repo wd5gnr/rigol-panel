@@ -15,7 +15,7 @@ class Scope:
             cxstr="TCPIP::"+cxstring+"::INSTR"
         else:
             cxstr="USB0::0x1AB1::0x044C::"+cxstring+"::INSTR"
-        self.visa=pyvisa.ResourceManager()
+        self.visa=pyvisa.ResourceManager('@py')
         self.scope=self.visa.open_resource(cxstr)
         self.connected=True
 
